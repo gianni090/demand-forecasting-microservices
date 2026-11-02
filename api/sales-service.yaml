@@ -1,0 +1,391 @@
+openapi: "3.0.3"
+info:
+  title: "sales-service"
+  version: "1.0.0"
+  description: "Контракт лабораторной работы 3. Внешние операции доступны через Gateway; internal доступны только в закрытой сети. Все даты UTC, единицы товара целые."
+  contact: {"name": "Криворучко К Н"}
+  license: {"name": "Учебная работа"}
+servers: [{"url": "http://localhost:8080", "description": "Gateway — только public-операции"}]
+tags:
+  - {"name": "public", "description": "Клиентские операции через Gateway"}
+  - {"name": "internal", "description": "Межсервисные операции в закрытой сети"}
+security: [{"bearerAuth": []}]
+paths:
+  "/api/v1/imports":
+    post:
+      tags: ["public"]
+      operationId: "createImport"
+      summary: "Загрузить полную выгрузку продаж"
+      description: "CSV UTF-8; полный снимок истории, не добавление строк. Максимум 100 MiB. Новая версия доступна только после успешной проверки. Дубликат файла возвращает существующий импорт."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        - {"$ref": "#/components/parameters/IdempotencyKey"}
+      responses:
+        202:
+          description: "Задание принято"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/ImportStatus"}
+              example:
+                id: "3f85a61b-f9af-5758-8285-be0cad78d7a5"
+                status: "PENDING"
+                createdAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      requestBody:
+        required: true
+        description: "Пример CSV: invoiceId,productId,quantity,soldAt,unitPrice; INV-1,SKU-001,2,2026-10-26T10:00:00Z,100.00"
+        content:
+          "multipart/form-data":
+            schema:
+              type: "object"
+              required: ["file"]
+              properties:
+                file:
+                  {"type": "string", "format": "binary", "description": "Полный CSV UTF-8 до 100 MiB"}
+              additionalProperties: false
+            example: {"file": "sales.csv"}
+  "/api/v1/imports/{importId}":
+    get:
+      tags: ["public"]
+      operationId: "getImport"
+      summary: "Получить состояние импорта"
+      description: "Состояние читается из собственной базы сервиса. Отсутствующий ресурс: 404; временная недоступность: 503."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "importId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "3f85a61b-f9af-5758-8285-be0cad78d7a5", "format": "uuid"}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/ImportStatus"}
+              example:
+                id: "3f85a61b-f9af-5758-8285-be0cad78d7a5"
+                status: "COMPLETED"
+                createdAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+  "/internal/v1/sales/weekly":
+    get:
+      tags: ["internal"]
+      operationId: "getWeeklySales"
+      summary: "Получить недельные продажи"
+      description: "Неизменяемая версия данных. Недели начинаются в понедельник; fromDate и toDate включаются. Возвраты исключены, пропущенные недели после появления товара заполнены нулями. Клиент читает все страницы."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "productId"
+          in: "query"
+          required: true
+          description: "Обязательный параметр выборки."
+          schema: {"type": "string", "example": "SKU-001", "minLength": 1}
+        -
+          name: "datasetVersion"
+          in: "query"
+          required: true
+          description: "Обязательный параметр выборки."
+          schema: {"type": "integer", "example": 3, "minimum": 1}
+        -
+          name: "fromDate"
+          in: "query"
+          required: true
+          description: "Обязательный параметр выборки."
+          schema: {"type": "string", "example": "2026-09-07", "format": "date"}
+        -
+          name: "toDate"
+          in: "query"
+          required: true
+          description: "Обязательный параметр выборки."
+          schema: {"type": "string", "example": "2026-10-26", "format": "date"}
+        -
+          name: "page"
+          in: "query"
+          required: false
+          description: "Номер страницы с 1."
+          schema: {"type": "integer", "example": 1, "minimum": 1, "default": 1}
+        -
+          name: "size"
+          in: "query"
+          required: false
+          description: "Число записей на странице, максимум 100."
+          schema: {"type": "integer", "example": 20, "minimum": 1, "maximum": 100, "default": 20}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/WeeklySalesResponse"}
+              example:
+                productId: "SKU-001"
+                datasetVersion: 3
+                fromDate: "2026-09-07"
+                toDate: "2026-10-26"
+                items:
+                  - {"weekStart": "2026-09-07", "quantity": 12}
+                  - {"weekStart": "2026-09-14", "quantity": 18}
+                  - {"weekStart": "2026-09-21", "quantity": 0}
+                  - {"weekStart": "2026-09-28", "quantity": 25}
+                  - {"weekStart": "2026-10-05", "quantity": 16}
+                  - {"weekStart": "2026-10-12", "quantity": 20}
+                  - {"weekStart": "2026-10-19", "quantity": 10}
+                  - {"weekStart": "2026-10-26", "quantity": 20}
+                page: 1
+                size: 20
+                total: 8
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      servers: [{"url": "http://sales-service:8000", "description": "Только закрытая сеть"}]
+components:
+  securitySchemes: {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}}
+  parameters:
+    IdempotencyKey:
+      name: "Idempotency-Key"
+      in: "header"
+      required: true
+      description: "UUID ключа операции. Повтор с тем же телом возвращает исходный результат; другое тело даёт 409. HTTP-запись хранится 7 суток; доменные ограничения и отменяющие записи действуют независимо от этого срока."
+      schema:
+        {"type": "string", "example": "fb8e9357-c438-5e3c-ad25-b1cbb3fe03ec", "format": "uuid"}
+    CorrelationId:
+      name: "X-Correlation-Id"
+      in: "header"
+      required: false
+      description: "Идентификатор сквозного сценария; при отсутствии создаётся на входе."
+      schema:
+        {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+  schemas:
+    Problem:
+      type: "object"
+      required: ["type", "title", "status", "detail", "code", "instance", "correlationId"]
+      properties:
+        type: {"type": "string", "example": "urn:problem:conflict", "format": "uri"}
+        title: {"type": "string", "example": "Conflict"}
+        status: {"type": "integer", "example": 409, "minimum": 400, "maximum": 599}
+        detail: {"type": "string", "example": "Resource state does not allow this operation"}
+        code: {"type": "string", "example": "STATE_CONFLICT"}
+        instance: {"type": "string", "example": "/api/v1/purchase-orders"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+      additionalProperties: false
+    WeeklySale:
+      type: "object"
+      required: ["weekStart", "quantity"]
+      properties:
+        weekStart: {"type": "string", "example": "2026-10-26", "format": "date"}
+        quantity: {"type": "integer", "example": 20, "minimum": 0}
+      additionalProperties: false
+    ImportStatus:
+      type: "object"
+      required: ["id", "status", "createdAt"]
+      properties:
+        id: {"type": "string", "example": "3f85a61b-f9af-5758-8285-be0cad78d7a5", "format": "uuid"}
+        status:
+          type: "string"
+          example: "COMPLETED"
+          enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED"]
+        datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+        acceptedRows: {"type": "integer", "example": 1000, "minimum": 0}
+        rejectedRows: {"type": "integer", "example": 12, "minimum": 0}
+        createdAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+      additionalProperties: false
+    WeeklySalesResponse:
+      type: "object"
+      required:
+        ["productId", "datasetVersion", "fromDate", "toDate", "items", "page", "size", "total"]
+      properties:
+        productId: {"type": "string", "example": "SKU-001"}
+        datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+        fromDate: {"type": "string", "example": "2026-09-07", "format": "date"}
+        toDate: {"type": "string", "example": "2026-10-26", "format": "date"}
+        items: {"type": "array", "items": {"$ref": "#/components/schemas/WeeklySale"}}
+        page: {"type": "integer", "example": 1, "minimum": 1}
+        size: {"type": "integer", "example": 20, "minimum": 1, "maximum": 100}
+        total: {"type": "integer", "example": 8, "minimum": 0}
+      additionalProperties: false
+    SalesImported:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType: {"type": "string", "example": "sales.imported", "enum": ["sales.imported"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "3f85a61b-f9af-5758-8285-be0cad78d7a5", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["importId", "datasetVersion", "asOfDate", "productIds", "acceptedRows"]
+          properties:
+            importId:
+              {"type": "string", "example": "3f85a61b-f9af-5758-8285-be0cad78d7a5", "format": "uuid"}
+            datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+            asOfDate: {"type": "string", "example": "2026-11-02", "format": "date"}
+            productIds:
+              {"type": "array", "items": {"type": "string", "example": "SKU-001"}, "minItems": 1}
+            acceptedRows: {"type": "integer", "example": 1000, "minimum": 0}
+          additionalProperties: false
+      additionalProperties: false
+  responses:
+    Error400:
+      description: "Invalid request"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:invalid-request"
+            title: "Invalid request"
+            status: 400
+            detail: "Запрос не может быть выполнен: INVALID_REQUEST"
+            code: "INVALID_REQUEST"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error401:
+      description: "Authentication required"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:unauthorized"
+            title: "Authentication required"
+            status: 401
+            detail: "Запрос не может быть выполнен: UNAUTHORIZED"
+            code: "UNAUTHORIZED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error403:
+      description: "Access denied"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:forbidden"
+            title: "Access denied"
+            status: 403
+            detail: "Запрос не может быть выполнен: FORBIDDEN"
+            code: "FORBIDDEN"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error404:
+      description: "Resource not found"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:not-found"
+            title: "Resource not found"
+            status: 404
+            detail: "Запрос не может быть выполнен: NOT_FOUND"
+            code: "NOT_FOUND"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error409:
+      description: "State conflict"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:state-conflict"
+            title: "State conflict"
+            status: 409
+            detail: "Запрос не может быть выполнен: STATE_CONFLICT"
+            code: "STATE_CONFLICT"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error422:
+      description: "Validation failed"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:validation-error"
+            title: "Validation failed"
+            status: 422
+            detail: "Запрос не может быть выполнен: VALIDATION_ERROR"
+            code: "VALIDATION_ERROR"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error429:
+      description: "Too many requests"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:rate-limited"
+            title: "Too many requests"
+            status: 429
+            detail: "Запрос не может быть выполнен: RATE_LIMITED"
+            code: "RATE_LIMITED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error503:
+      description: "Service unavailable"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:dependency-unavailable"
+            title: "Service unavailable"
+            status: 503
+            detail: "Запрос не может быть выполнен: DEPENDENCY_UNAVAILABLE"
+            code: "DEPENDENCY_UNAVAILABLE"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+x-messages:
+  sales.imported:
+    exchange: "demand.events"
+    routingKey: "sales.imported"
+    publisher: "sales-service"
+    subscribers: ["forecast-service"]
+    schema: {"$ref": "#/components/schemas/SalesImported"}
+    queues: ["q.forecast-service.sales.imported"]

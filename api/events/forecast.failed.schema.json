@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "forecast.failed",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "occurredAt",
+    "correlationId",
+    "aggregateId",
+    "aggregateVersion",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "examples": [
+        "6e8887d0-1ada-59fe-a75b-80ca5a66e73c"
+      ]
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "forecast.failed"
+      ],
+      "examples": [
+        "forecast.failed"
+      ]
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "enum": [
+        1
+      ],
+      "examples": [
+        1
+      ]
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "examples": [
+        "2026-11-02T09:00:00Z"
+      ]
+    },
+    "correlationId": {
+      "type": "string",
+      "format": "uuid",
+      "examples": [
+        "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+      ]
+    },
+    "aggregateId": {
+      "type": "string",
+      "format": "uuid",
+      "examples": [
+        "70b26f49-f426-533f-99b6-1a24a0f6669b"
+      ]
+    },
+    "aggregateVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "examples": [
+        1
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "jobId",
+        "productId",
+        "code"
+      ],
+      "properties": {
+        "jobId": {
+          "type": "string",
+          "format": "uuid",
+          "examples": [
+            "70b26f49-f426-533f-99b6-1a24a0f6669b"
+          ]
+        },
+        "productId": {
+          "type": "string",
+          "examples": [
+            "SKU-001"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "examples": [
+            "INSUFFICIENT_HISTORY"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

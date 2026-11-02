@@ -1,0 +1,685 @@
+openapi: "3.0.3"
+info:
+  title: "replenishment-service"
+  version: "1.0.0"
+  description: "Контракт лабораторной работы 3. Внешние операции доступны через Gateway; internal доступны только в закрытой сети. Все даты UTC, единицы товара целые."
+  contact: {"name": "Криворучко К Н"}
+  license: {"name": "Учебная работа"}
+servers: [{"url": "http://localhost:8080", "description": "Gateway — только public-операции"}]
+tags:
+  - {"name": "public", "description": "Клиентские операции через Gateway"}
+  - {"name": "internal", "description": "Межсервисные операции в закрытой сети"}
+security: [{"bearerAuth": []}]
+paths:
+  "/api/v1/recommendations":
+    post:
+      tags: ["public"]
+      operationId: "createRecommendation"
+      summary: "Рассчитать рекомендацию пополнения"
+      description: "Используется ceil(demandP90), R=1 неделя, L=1 неделя. Q=max(0,S-onHand-confirmedInbound). Естественный ключ forecastId/stockVersion/policyVersion исключает дубли."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        - {"$ref": "#/components/parameters/IdempotencyKey"}
+      responses:
+        201:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/Recommendation"}
+              example:
+                id: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                version: 1
+                productId: "SKU-001"
+                forecastId: "5339aa45-95f2-590a-8606-b1a73e72baba"
+                stockVersion: 7
+                inventoryPosition: 16
+                targetLevel: 40
+                quantity: 24
+                arrivalDate: "2026-11-09"
+                validUntil: "2026-11-09T00:00:00Z"
+                status: "READY"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema: {"$ref": "#/components/schemas/CreateRecommendationRequest"}
+            example: {"forecastId": "5339aa45-95f2-590a-8606-b1a73e72baba"}
+    get:
+      tags: ["public"]
+      operationId: "listRecommendations"
+      summary: "Получить список рекомендаций"
+      description: "Состояние читается из собственной базы сервиса. Отсутствующий ресурс: 404; временная недоступность: 503."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "page"
+          in: "query"
+          required: false
+          description: "Номер страницы с 1."
+          schema: {"type": "integer", "example": 1, "minimum": 1, "default": 1}
+        -
+          name: "size"
+          in: "query"
+          required: false
+          description: "Число записей на странице, максимум 100."
+          schema: {"type": "integer", "example": 20, "minimum": 1, "maximum": 100, "default": 20}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/RecommendationPage"}
+              example:
+                items:
+                  -
+                    id: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                    version: 1
+                    productId: "SKU-001"
+                    forecastId: "5339aa45-95f2-590a-8606-b1a73e72baba"
+                    stockVersion: 7
+                    inventoryPosition: 16
+                    targetLevel: 40
+                    quantity: 24
+                    arrivalDate: "2026-11-09"
+                    validUntil: "2026-11-09T00:00:00Z"
+                    status: "READY"
+                page: 1
+                size: 20
+                total: 1
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+  "/api/v1/recommendations/{recommendationId}":
+    get:
+      tags: ["public"]
+      operationId: "getRecommendation"
+      summary: "Просмотреть рекомендацию"
+      description: "Состояние читается из собственной базы сервиса. Отсутствующий ресурс: 404; временная недоступность: 503."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "recommendationId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/Recommendation"}
+              example:
+                id: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                version: 1
+                productId: "SKU-001"
+                forecastId: "5339aa45-95f2-590a-8606-b1a73e72baba"
+                stockVersion: 7
+                inventoryPosition: 16
+                targetLevel: 40
+                quantity: 24
+                arrivalDate: "2026-11-09"
+                validUntil: "2026-11-09T00:00:00Z"
+                status: "READY"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+  "/internal/v1/recommendations/{recommendationId}/claim":
+    post:
+      tags: ["internal"]
+      operationId: "claimRecommendation"
+      summary: "Закрепить рекомендацию за заказом"
+      description: "READY -> CLAIMED атомарно. Проверяются версия, срок действия и quantity > 0. Повтор тем же orderId возвращает тот же результат; другой orderId получает 409. Отменённая попытка для orderId не возобновляется."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "recommendationId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+        - {"$ref": "#/components/parameters/IdempotencyKey"}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/Recommendation"}
+              example:
+                id: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                version: 1
+                productId: "SKU-001"
+                forecastId: "5339aa45-95f2-590a-8606-b1a73e72baba"
+                stockVersion: 7
+                inventoryPosition: 16
+                targetLevel: 40
+                quantity: 24
+                arrivalDate: "2026-11-09"
+                validUntil: "2026-11-09T00:00:00Z"
+                status: "CLAIMED"
+                claimedBy: "78827a78-e82a-5f56-ab94-e05094331891"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      servers: [{"url": "http://replenishment-service:8000", "description": "Только закрытая сеть"}]
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema: {"$ref": "#/components/schemas/ClaimRequest"}
+            example: {"orderId": "78827a78-e82a-5f56-ab94-e05094331891", "expectedVersion": 1}
+  "/internal/v1/recommendations/{recommendationId}/release":
+    post:
+      tags: ["internal"]
+      operationId: "releaseRecommendation"
+      summary: "Освободить рекомендацию при отмене"
+      description: "Компенсация только для того же orderId до APPLIED. Сохраняется запрет позднего claim для этой попытки. STOCK_CHANGED переводит в STALE; остальные причины возвращают READY, если версия и срок ещё допустимы."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "recommendationId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+        - {"$ref": "#/components/parameters/IdempotencyKey"}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/Recommendation"}
+              example:
+                id: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                version: 1
+                productId: "SKU-001"
+                forecastId: "5339aa45-95f2-590a-8606-b1a73e72baba"
+                stockVersion: 7
+                inventoryPosition: 16
+                targetLevel: 40
+                quantity: 24
+                arrivalDate: "2026-11-09"
+                validUntil: "2026-11-09T00:00:00Z"
+                status: "READY"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      servers: [{"url": "http://replenishment-service:8000", "description": "Только закрытая сеть"}]
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema: {"$ref": "#/components/schemas/ReleaseRequest"}
+            example:
+              {"orderId": "78827a78-e82a-5f56-ab94-e05094331891", "reason": "DEPENDENCY_FAILED"}
+components:
+  securitySchemes: {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}}
+  parameters:
+    IdempotencyKey:
+      name: "Idempotency-Key"
+      in: "header"
+      required: true
+      description: "UUID ключа операции. Повтор с тем же телом возвращает исходный результат; другое тело даёт 409. HTTP-запись хранится 7 суток; доменные ограничения и отменяющие записи действуют независимо от этого срока."
+      schema:
+        {"type": "string", "example": "fb8e9357-c438-5e3c-ad25-b1cbb3fe03ec", "format": "uuid"}
+    CorrelationId:
+      name: "X-Correlation-Id"
+      in: "header"
+      required: false
+      description: "Идентификатор сквозного сценария; при отсутствии создаётся на входе."
+      schema:
+        {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+  schemas:
+    Problem:
+      type: "object"
+      required: ["type", "title", "status", "detail", "code", "instance", "correlationId"]
+      properties:
+        type: {"type": "string", "example": "urn:problem:conflict", "format": "uri"}
+        title: {"type": "string", "example": "Conflict"}
+        status: {"type": "integer", "example": 409, "minimum": 400, "maximum": 599}
+        detail: {"type": "string", "example": "Resource state does not allow this operation"}
+        code: {"type": "string", "example": "STATE_CONFLICT"}
+        instance: {"type": "string", "example": "/api/v1/purchase-orders"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+      additionalProperties: false
+    Recommendation:
+      type: "object"
+      required:
+        - "id"
+        - "version"
+        - "productId"
+        - "forecastId"
+        - "stockVersion"
+        - "inventoryPosition"
+        - "targetLevel"
+        - "quantity"
+        - "arrivalDate"
+        - "validUntil"
+        - "status"
+      properties:
+        id: {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+        version: {"type": "integer", "example": 1, "minimum": 1}
+        productId: {"type": "string", "example": "SKU-001"}
+        forecastId:
+          {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+        stockVersion: {"type": "integer", "example": 7, "minimum": 1}
+        inventoryPosition: {"type": "integer", "example": 16, "minimum": 0}
+        targetLevel: {"type": "integer", "example": 40, "minimum": 0}
+        quantity: {"type": "integer", "example": 24, "minimum": 0}
+        arrivalDate: {"type": "string", "example": "2026-11-09", "format": "date"}
+        validUntil: {"type": "string", "example": "2026-11-09T00:00:00Z", "format": "date-time"}
+        status:
+          {"type": "string", "example": "READY", "enum": ["READY", "CLAIMED", "APPLIED", "STALE"]}
+        claimedBy:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+      additionalProperties: false
+    CreateRecommendationRequest:
+      type: "object"
+      required: ["forecastId"]
+      properties:
+        forecastId:
+          {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+      additionalProperties: false
+    ClaimRequest:
+      type: "object"
+      required: ["orderId", "expectedVersion"]
+      properties:
+        orderId:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        expectedVersion: {"type": "integer", "example": 1, "minimum": 1}
+      additionalProperties: false
+    ReleaseRequest:
+      type: "object"
+      required: ["orderId", "reason"]
+      properties:
+        orderId:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        reason:
+          type: "string"
+          example: "DEPENDENCY_FAILED"
+          enum: ["USER_CANCEL", "STOCK_CHANGED", "DEPENDENCY_FAILED"]
+      additionalProperties: false
+    RecommendationPage:
+      type: "object"
+      required: ["items", "page", "size", "total"]
+      properties:
+        items: {"type": "array", "items": {"$ref": "#/components/schemas/Recommendation"}}
+        page: {"type": "integer", "example": 1, "minimum": 1}
+        size: {"type": "integer", "example": 20, "minimum": 1, "maximum": 100}
+        total: {"type": "integer", "example": 1, "minimum": 0}
+      additionalProperties: false
+    ForecastCompleted:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType:
+          {"type": "string", "example": "forecast.completed", "enum": ["forecast.completed"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["forecastId", "productId", "datasetVersion"]
+          properties:
+            forecastId:
+              {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+          additionalProperties: false
+      additionalProperties: false
+    ForecastFailed:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType: {"type": "string", "example": "forecast.failed", "enum": ["forecast.failed"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "70b26f49-f426-533f-99b6-1a24a0f6669b", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["jobId", "productId", "code"]
+          properties:
+            jobId:
+              {"type": "string", "example": "70b26f49-f426-533f-99b6-1a24a0f6669b", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            code: {"type": "string", "example": "INSUFFICIENT_HISTORY"}
+          additionalProperties: false
+      additionalProperties: false
+    InventoryChanged:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType: {"type": "string", "example": "inventory.changed", "enum": ["inventory.changed"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "170a0877-7411-5f44-a26d-79df3fab23a7", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 8, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["productId", "stockVersion", "reason"]
+          properties:
+            productId: {"type": "string", "example": "SKU-001"}
+            stockVersion: {"type": "integer", "example": 8, "minimum": 1}
+            reason:
+              type: "string"
+              example: "INBOUND_CONFIRMED"
+              enum: ["ADJUSTMENT", "INBOUND_CONFIRMED", "RECEIPT"]
+          additionalProperties: false
+      additionalProperties: false
+    OrderConfirmed:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType:
+          {"type": "string", "example": "purchase-order.confirmed", "enum": ["purchase-order.confirmed"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["orderId", "recommendationId", "productId", "quantity", "arrivalDate"]
+          properties:
+            orderId:
+              {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+            recommendationId:
+              {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            quantity: {"type": "integer", "example": 24, "minimum": 1}
+            arrivalDate: {"type": "string", "example": "2026-11-09", "format": "date"}
+          additionalProperties: false
+      additionalProperties: false
+    OrderCancelled:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType:
+          {"type": "string", "example": "purchase-order.cancelled", "enum": ["purchase-order.cancelled"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["orderId", "recommendationId", "productId", "reason"]
+          properties:
+            orderId:
+              {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+            recommendationId:
+              {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            reason:
+              type: "string"
+              example: "DEPENDENCY_FAILED"
+              enum: ["USER_CANCEL", "STOCK_CHANGED", "DEPENDENCY_FAILED"]
+          additionalProperties: false
+      additionalProperties: false
+  responses:
+    Error400:
+      description: "Invalid request"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:invalid-request"
+            title: "Invalid request"
+            status: 400
+            detail: "Запрос не может быть выполнен: INVALID_REQUEST"
+            code: "INVALID_REQUEST"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error401:
+      description: "Authentication required"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:unauthorized"
+            title: "Authentication required"
+            status: 401
+            detail: "Запрос не может быть выполнен: UNAUTHORIZED"
+            code: "UNAUTHORIZED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error403:
+      description: "Access denied"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:forbidden"
+            title: "Access denied"
+            status: 403
+            detail: "Запрос не может быть выполнен: FORBIDDEN"
+            code: "FORBIDDEN"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error404:
+      description: "Resource not found"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:not-found"
+            title: "Resource not found"
+            status: 404
+            detail: "Запрос не может быть выполнен: NOT_FOUND"
+            code: "NOT_FOUND"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error409:
+      description: "State conflict"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:state-conflict"
+            title: "State conflict"
+            status: 409
+            detail: "Запрос не может быть выполнен: STATE_CONFLICT"
+            code: "STATE_CONFLICT"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error422:
+      description: "Validation failed"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:validation-error"
+            title: "Validation failed"
+            status: 422
+            detail: "Запрос не может быть выполнен: VALIDATION_ERROR"
+            code: "VALIDATION_ERROR"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error429:
+      description: "Too many requests"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:rate-limited"
+            title: "Too many requests"
+            status: 429
+            detail: "Запрос не может быть выполнен: RATE_LIMITED"
+            code: "RATE_LIMITED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error503:
+      description: "Service unavailable"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:dependency-unavailable"
+            title: "Service unavailable"
+            status: 503
+            detail: "Запрос не может быть выполнен: DEPENDENCY_UNAVAILABLE"
+            code: "DEPENDENCY_UNAVAILABLE"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+x-messages:
+  forecast.completed:
+    exchange: "demand.events"
+    routingKey: "forecast.completed"
+    publisher: "forecast-service"
+    subscribers: ["replenishment-service"]
+    schema: {"$ref": "#/components/schemas/ForecastCompleted"}
+    queues: ["q.replenishment-service.forecast.completed"]
+  forecast.failed:
+    exchange: "demand.events"
+    routingKey: "forecast.failed"
+    publisher: "forecast-service"
+    subscribers: ["replenishment-service"]
+    schema: {"$ref": "#/components/schemas/ForecastFailed"}
+    queues: ["q.replenishment-service.forecast.failed"]
+  inventory.changed:
+    exchange: "demand.events"
+    routingKey: "inventory.changed"
+    publisher: "inventory-service"
+    subscribers: ["replenishment-service"]
+    schema: {"$ref": "#/components/schemas/InventoryChanged"}
+    queues: ["q.replenishment-service.inventory.changed"]
+  purchase-order.confirmed:
+    exchange: "demand.events"
+    routingKey: "purchase-order.confirmed"
+    publisher: "procurement-service"
+    subscribers: ["inventory-service", "replenishment-service"]
+    schema: {"$ref": "#/components/schemas/OrderConfirmed"}
+    queues:
+      - "q.inventory-service.purchase-order.confirmed"
+      - "q.replenishment-service.purchase-order.confirmed"
+  purchase-order.cancelled:
+    exchange: "demand.events"
+    routingKey: "purchase-order.cancelled"
+    publisher: "procurement-service"
+    subscribers: ["inventory-service", "replenishment-service"]
+    schema: {"$ref": "#/components/schemas/OrderCancelled"}
+    queues:
+      - "q.inventory-service.purchase-order.cancelled"
+      - "q.replenishment-service.purchase-order.cancelled"

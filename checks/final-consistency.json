@@ -1,0 +1,12 @@
+{
+  "services": 5,
+  "operations": 22,
+  "events": 7,
+  "editableDiagramPages": 4,
+  "wordAppendixMatchesContracts": true,
+  "localRefsResolved": true,
+  "lintErrors": 0,
+  "lintWarnings": 0,
+  "swaggerErrors": 0,
+  "docxBytes": 897604
+}

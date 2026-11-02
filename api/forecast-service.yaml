@@ -1,0 +1,454 @@
+openapi: "3.0.3"
+info:
+  title: "forecast-service"
+  version: "1.0.0"
+  description: "Контракт лабораторной работы 3. Внешние операции доступны через Gateway; internal доступны только в закрытой сети. Все даты UTC, единицы товара целые."
+  contact: {"name": "Криворучко К Н"}
+  license: {"name": "Учебная работа"}
+servers: [{"url": "http://localhost:8080", "description": "Gateway — только public-операции"}]
+tags:
+  - {"name": "public", "description": "Клиентские операции через Gateway"}
+  - {"name": "internal", "description": "Межсервисные операции в закрытой сети"}
+security: [{"bearerAuth": []}]
+paths:
+  "/api/v1/forecast-jobs":
+    post:
+      tags: ["public"]
+      operationId: "createForecastJob"
+      summary: "Запустить прогнозирование"
+      description: "Идемпотентное задание. Только завершённые недели до asOfDate; горизонт 2 недели. Для повторного естественного ключа productId/datasetVersion/asOfDate/method возвращается существующее задание."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        - {"$ref": "#/components/parameters/IdempotencyKey"}
+      responses:
+        202:
+          description: "Задание принято"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/ForecastJob"}
+              example:
+                id: "70b26f49-f426-533f-99b6-1a24a0f6669b"
+                productId: "SKU-001"
+                status: "PENDING"
+                createdAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema: {"$ref": "#/components/schemas/CreateForecastRequest"}
+            example:
+              productId: "SKU-001"
+              datasetVersion: 3
+              asOfDate: "2026-11-02"
+              horizonWeeks: 2
+              method: "lightgbm"
+  "/api/v1/forecast-jobs/{jobId}":
+    get:
+      tags: ["public"]
+      operationId: "getForecastJob"
+      summary: "Получить состояние расчёта"
+      description: "Состояние читается из собственной базы сервиса. Отсутствующий ресурс: 404; временная недоступность: 503."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "jobId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "70b26f49-f426-533f-99b6-1a24a0f6669b", "format": "uuid"}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/ForecastJob"}
+              example:
+                id: "70b26f49-f426-533f-99b6-1a24a0f6669b"
+                productId: "SKU-001"
+                status: "PENDING"
+                createdAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+  "/internal/v1/forecasts/{forecastId}":
+    get:
+      tags: ["internal"]
+      operationId: "getForecast"
+      summary: "Получить неизменяемый прогноз"
+      description: "Квантили относятся к суммарным продажам за две недели. Соблюдается 0 <= p10 <= p50 <= p90. Это прогноз наблюдаемых продаж, а не восстановленного скрытого спроса."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "forecastId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/Forecast"}
+              example:
+                id: "5339aa45-95f2-590a-8606-b1a73e72baba"
+                productId: "SKU-001"
+                datasetVersion: 3
+                asOfDate: "2026-11-02"
+                horizonWeeks: 2
+                method: "lightgbm"
+                modelVersion: "lgbm-v1"
+                targetQuantile: 0.9
+                demandP10: 18
+                demandP50: 26
+                demandP90: 40
+                createdAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      servers: [{"url": "http://forecast-service:8000", "description": "Только закрытая сеть"}]
+components:
+  securitySchemes: {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}}
+  parameters:
+    IdempotencyKey:
+      name: "Idempotency-Key"
+      in: "header"
+      required: true
+      description: "UUID ключа операции. Повтор с тем же телом возвращает исходный результат; другое тело даёт 409. HTTP-запись хранится 7 суток; доменные ограничения и отменяющие записи действуют независимо от этого срока."
+      schema:
+        {"type": "string", "example": "fb8e9357-c438-5e3c-ad25-b1cbb3fe03ec", "format": "uuid"}
+    CorrelationId:
+      name: "X-Correlation-Id"
+      in: "header"
+      required: false
+      description: "Идентификатор сквозного сценария; при отсутствии создаётся на входе."
+      schema:
+        {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+  schemas:
+    Problem:
+      type: "object"
+      required: ["type", "title", "status", "detail", "code", "instance", "correlationId"]
+      properties:
+        type: {"type": "string", "example": "urn:problem:conflict", "format": "uri"}
+        title: {"type": "string", "example": "Conflict"}
+        status: {"type": "integer", "example": 409, "minimum": 400, "maximum": 599}
+        detail: {"type": "string", "example": "Resource state does not allow this operation"}
+        code: {"type": "string", "example": "STATE_CONFLICT"}
+        instance: {"type": "string", "example": "/api/v1/purchase-orders"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+      additionalProperties: false
+    Forecast:
+      type: "object"
+      required:
+        - "id"
+        - "productId"
+        - "datasetVersion"
+        - "asOfDate"
+        - "horizonWeeks"
+        - "method"
+        - "modelVersion"
+        - "targetQuantile"
+        - "demandP10"
+        - "demandP50"
+        - "demandP90"
+        - "createdAt"
+      properties:
+        id: {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+        productId: {"type": "string", "example": "SKU-001"}
+        datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+        asOfDate: {"type": "string", "example": "2026-11-02", "format": "date"}
+        horizonWeeks: {"type": "integer", "example": 2, "enum": [2]}
+        method: {"type": "string", "example": "lightgbm", "enum": ["last_value", "tsb", "lightgbm"]}
+        modelVersion: {"type": "string", "example": "lgbm-v1"}
+        targetQuantile: {"type": "number", "example": 0.9, "enum": [0.9]}
+        demandP10: {"type": "number", "example": 18, "minimum": 0}
+        demandP50: {"type": "number", "example": 26, "minimum": 0}
+        demandP90: {"type": "number", "example": 40, "minimum": 0}
+        createdAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+      additionalProperties: false
+    CreateForecastRequest:
+      type: "object"
+      required: ["productId", "datasetVersion", "asOfDate", "horizonWeeks", "method"]
+      properties:
+        productId: {"type": "string", "example": "SKU-001", "minLength": 1}
+        datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+        asOfDate: {"type": "string", "example": "2026-11-02", "format": "date"}
+        horizonWeeks: {"type": "integer", "example": 2, "enum": [2]}
+        method: {"type": "string", "example": "lightgbm", "enum": ["last_value", "tsb", "lightgbm"]}
+      additionalProperties: false
+    ForecastJob:
+      type: "object"
+      required: ["id", "productId", "status", "createdAt"]
+      properties:
+        id: {"type": "string", "example": "70b26f49-f426-533f-99b6-1a24a0f6669b", "format": "uuid"}
+        productId: {"type": "string", "example": "SKU-001"}
+        status:
+          {"type": "string", "example": "PENDING", "enum": ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"]}
+        forecastId:
+          {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+        errorCode: {"type": "string", "example": "INSUFFICIENT_HISTORY"}
+        createdAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+      additionalProperties: false
+    SalesImported:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType: {"type": "string", "example": "sales.imported", "enum": ["sales.imported"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "3f85a61b-f9af-5758-8285-be0cad78d7a5", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["importId", "datasetVersion", "asOfDate", "productIds", "acceptedRows"]
+          properties:
+            importId:
+              {"type": "string", "example": "3f85a61b-f9af-5758-8285-be0cad78d7a5", "format": "uuid"}
+            datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+            asOfDate: {"type": "string", "example": "2026-11-02", "format": "date"}
+            productIds:
+              {"type": "array", "items": {"type": "string", "example": "SKU-001"}, "minItems": 1}
+            acceptedRows: {"type": "integer", "example": 1000, "minimum": 0}
+          additionalProperties: false
+      additionalProperties: false
+    ForecastCompleted:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType:
+          {"type": "string", "example": "forecast.completed", "enum": ["forecast.completed"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["forecastId", "productId", "datasetVersion"]
+          properties:
+            forecastId:
+              {"type": "string", "example": "5339aa45-95f2-590a-8606-b1a73e72baba", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            datasetVersion: {"type": "integer", "example": 3, "minimum": 1}
+          additionalProperties: false
+      additionalProperties: false
+    ForecastFailed:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType: {"type": "string", "example": "forecast.failed", "enum": ["forecast.failed"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "70b26f49-f426-533f-99b6-1a24a0f6669b", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["jobId", "productId", "code"]
+          properties:
+            jobId:
+              {"type": "string", "example": "70b26f49-f426-533f-99b6-1a24a0f6669b", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            code: {"type": "string", "example": "INSUFFICIENT_HISTORY"}
+          additionalProperties: false
+      additionalProperties: false
+  responses:
+    Error400:
+      description: "Invalid request"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:invalid-request"
+            title: "Invalid request"
+            status: 400
+            detail: "Запрос не может быть выполнен: INVALID_REQUEST"
+            code: "INVALID_REQUEST"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error401:
+      description: "Authentication required"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:unauthorized"
+            title: "Authentication required"
+            status: 401
+            detail: "Запрос не может быть выполнен: UNAUTHORIZED"
+            code: "UNAUTHORIZED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error403:
+      description: "Access denied"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:forbidden"
+            title: "Access denied"
+            status: 403
+            detail: "Запрос не может быть выполнен: FORBIDDEN"
+            code: "FORBIDDEN"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error404:
+      description: "Resource not found"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:not-found"
+            title: "Resource not found"
+            status: 404
+            detail: "Запрос не может быть выполнен: NOT_FOUND"
+            code: "NOT_FOUND"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error409:
+      description: "State conflict"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:state-conflict"
+            title: "State conflict"
+            status: 409
+            detail: "Запрос не может быть выполнен: STATE_CONFLICT"
+            code: "STATE_CONFLICT"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error422:
+      description: "Validation failed"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:validation-error"
+            title: "Validation failed"
+            status: 422
+            detail: "Запрос не может быть выполнен: VALIDATION_ERROR"
+            code: "VALIDATION_ERROR"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error429:
+      description: "Too many requests"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:rate-limited"
+            title: "Too many requests"
+            status: 429
+            detail: "Запрос не может быть выполнен: RATE_LIMITED"
+            code: "RATE_LIMITED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error503:
+      description: "Service unavailable"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:dependency-unavailable"
+            title: "Service unavailable"
+            status: 503
+            detail: "Запрос не может быть выполнен: DEPENDENCY_UNAVAILABLE"
+            code: "DEPENDENCY_UNAVAILABLE"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+x-messages:
+  sales.imported:
+    exchange: "demand.events"
+    routingKey: "sales.imported"
+    publisher: "sales-service"
+    subscribers: ["forecast-service"]
+    schema: {"$ref": "#/components/schemas/SalesImported"}
+    queues: ["q.forecast-service.sales.imported"]
+  forecast.completed:
+    exchange: "demand.events"
+    routingKey: "forecast.completed"
+    publisher: "forecast-service"
+    subscribers: ["replenishment-service"]
+    schema: {"$ref": "#/components/schemas/ForecastCompleted"}
+    queues: ["q.replenishment-service.forecast.completed"]
+  forecast.failed:
+    exchange: "demand.events"
+    routingKey: "forecast.failed"
+    publisher: "forecast-service"
+    subscribers: ["replenishment-service"]
+    schema: {"$ref": "#/components/schemas/ForecastFailed"}
+    queues: ["q.replenishment-service.forecast.failed"]

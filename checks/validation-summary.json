@@ -1,0 +1,77 @@
+{
+  "date": "2026-11-02",
+  "redocly": "2.72.1",
+  "swaggerEditor": "4.14.7",
+  "results": [
+    {
+      "service": "sales-service",
+      "operations": 3,
+      "lint": {
+        "errors": 0,
+        "warnings": 0,
+        "ignored": 0
+      },
+      "exitCode": 0,
+      "swaggerEditor": {
+        "title": "sales-service",
+        "errors": []
+      }
+    },
+    {
+      "service": "forecast-service",
+      "operations": 3,
+      "lint": {
+        "errors": 0,
+        "warnings": 0,
+        "ignored": 0
+      },
+      "exitCode": 0,
+      "swaggerEditor": {
+        "title": "forecast-service",
+        "errors": []
+      }
+    },
+    {
+      "service": "inventory-service",
+      "operations": 7,
+      "lint": {
+        "errors": 0,
+        "warnings": 0,
+        "ignored": 0
+      },
+      "exitCode": 0,
+      "swaggerEditor": {
+        "title": "inventory-service",
+        "errors": []
+      }
+    },
+    {
+      "service": "replenishment-service",
+      "operations": 5,
+      "lint": {
+        "errors": 0,
+        "warnings": 0,
+        "ignored": 0
+      },
+      "exitCode": 0,
+      "swaggerEditor": {
+        "title": "replenishment-service",
+        "errors": []
+      }
+    },
+    {
+      "service": "procurement-service",
+      "operations": 4,
+      "lint": {
+        "errors": 0,
+        "warnings": 0,
+        "ignored": 0
+      },
+      "exitCode": 0,
+      "swaggerEditor": {
+        "title": "procurement-service",
+        "errors": []
+      }
+    }
+  ]
+}

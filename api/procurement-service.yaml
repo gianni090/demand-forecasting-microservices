@@ -1,0 +1,506 @@
+openapi: "3.0.3"
+info:
+  title: "procurement-service"
+  version: "1.0.0"
+  description: "Контракт лабораторной работы 3. Внешние операции доступны через Gateway; internal доступны только в закрытой сети. Все даты UTC, единицы товара целые."
+  contact: {"name": "Криворучко К Н"}
+  license: {"name": "Учебная работа"}
+servers: [{"url": "http://localhost:8080", "description": "Gateway — только public-операции"}]
+tags:
+  - {"name": "public", "description": "Клиентские операции через Gateway"}
+  - {"name": "internal", "description": "Межсервисные операции в закрытой сети"}
+security: [{"bearerAuth": []}]
+paths:
+  "/api/v1/purchase-orders":
+    post:
+      tags: ["public"]
+      operationId: "createPurchaseOrder"
+      summary: "Оформить закупку по рекомендации"
+      description: "Роль purchaser. Создаёт PREPARING и сохранённое задание саги. Количество и дата берутся из claim-ответа. На рекомендацию не более одного заказа со статусом, отличным от CANCELLED; на товар не более одной PREPARING/CANCELLING-саги. После отмены допустима новая попытка с новым ключом и orderId, если рекомендация READY."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        - {"$ref": "#/components/parameters/IdempotencyKey"}
+      responses:
+        202:
+          description: "Задание принято"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/PurchaseOrder"}
+              example:
+                id: "78827a78-e82a-5f56-ab94-e05094331891"
+                recommendationId: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                productId: "SKU-001"
+                status: "PREPARING"
+                sagaStep: "CLAIM"
+                createdAt: "2026-11-02T09:00:00Z"
+                updatedAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema: {"$ref": "#/components/schemas/CreateOrderRequest"}
+            example:
+              recommendationId: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+              recommendationVersion: 1
+              productId: "SKU-001"
+    get:
+      tags: ["public"]
+      operationId: "listPurchaseOrders"
+      summary: "Получить список закупок"
+      description: "Состояние читается из собственной базы сервиса. Отсутствующий ресурс: 404; временная недоступность: 503."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "page"
+          in: "query"
+          required: false
+          description: "Номер страницы с 1."
+          schema: {"type": "integer", "example": 1, "minimum": 1, "default": 1}
+        -
+          name: "size"
+          in: "query"
+          required: false
+          description: "Число записей на странице, максимум 100."
+          schema: {"type": "integer", "example": 20, "minimum": 1, "maximum": 100, "default": 20}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/PurchaseOrderPage"}
+              example:
+                items:
+                  -
+                    id: "78827a78-e82a-5f56-ab94-e05094331891"
+                    recommendationId: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                    productId: "SKU-001"
+                    status: "PREPARING"
+                    sagaStep: "CLAIM"
+                    createdAt: "2026-11-02T09:00:00Z"
+                    updatedAt: "2026-11-02T09:00:00Z"
+                page: 1
+                size: 20
+                total: 1
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+  "/api/v1/purchase-orders/{orderId}":
+    get:
+      tags: ["public"]
+      operationId: "getPurchaseOrder"
+      summary: "Получить состояние закупки"
+      description: "Состояние читается из собственной базы сервиса. Отсутствующий ресурс: 404; временная недоступность: 503."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "orderId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+      responses:
+        200:
+          description: "Успешный результат"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/PurchaseOrder"}
+              example:
+                id: "78827a78-e82a-5f56-ab94-e05094331891"
+                recommendationId: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                productId: "SKU-001"
+                status: "PREPARING"
+                sagaStep: "CLAIM"
+                createdAt: "2026-11-02T09:00:00Z"
+                updatedAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+  "/api/v1/purchase-orders/{orderId}/cancel":
+    post:
+      tags: ["public"]
+      operationId: "cancelPurchaseOrder"
+      summary: "Отменить оформление закупки"
+      description: "PREPARING -> CANCELLING, затем компенсации. Конкурирует с CONFIRMED через локальную блокировку версии заказа. После CONFIRMED/RECEIVED возвращается 409; подтверждённый заказ в этой версии не отменяется."
+      parameters:
+        - {"$ref": "#/components/parameters/CorrelationId"}
+        -
+          name: "orderId"
+          in: "path"
+          required: true
+          description: "Идентификатор ресурса."
+          schema:
+            {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        - {"$ref": "#/components/parameters/IdempotencyKey"}
+      responses:
+        202:
+          description: "Задание принято"
+          headers:
+            X-Correlation-Id:
+              description: "Идентификатор сценария"
+              schema:
+                {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+          content:
+            "application/json":
+              schema: {"$ref": "#/components/schemas/PurchaseOrder"}
+              example:
+                id: "78827a78-e82a-5f56-ab94-e05094331891"
+                recommendationId: "c1b275fe-ab44-51ca-b101-a16be786abd0"
+                productId: "SKU-001"
+                status: "CANCELLING"
+                sagaStep: "COMPENSATE"
+                createdAt: "2026-11-02T09:00:00Z"
+                updatedAt: "2026-11-02T09:00:00Z"
+        400: {"$ref": "#/components/responses/Error400"}
+        401: {"$ref": "#/components/responses/Error401"}
+        403: {"$ref": "#/components/responses/Error403"}
+        404: {"$ref": "#/components/responses/Error404"}
+        409: {"$ref": "#/components/responses/Error409"}
+        422: {"$ref": "#/components/responses/Error422"}
+        429: {"$ref": "#/components/responses/Error429"}
+        503: {"$ref": "#/components/responses/Error503"}
+components:
+  securitySchemes: {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}}
+  parameters:
+    IdempotencyKey:
+      name: "Idempotency-Key"
+      in: "header"
+      required: true
+      description: "UUID ключа операции. Повтор с тем же телом возвращает исходный результат; другое тело даёт 409. HTTP-запись хранится 7 суток; доменные ограничения и отменяющие записи действуют независимо от этого срока."
+      schema:
+        {"type": "string", "example": "fb8e9357-c438-5e3c-ad25-b1cbb3fe03ec", "format": "uuid"}
+    CorrelationId:
+      name: "X-Correlation-Id"
+      in: "header"
+      required: false
+      description: "Идентификатор сквозного сценария; при отсутствии создаётся на входе."
+      schema:
+        {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+  schemas:
+    Problem:
+      type: "object"
+      required: ["type", "title", "status", "detail", "code", "instance", "correlationId"]
+      properties:
+        type: {"type": "string", "example": "urn:problem:conflict", "format": "uri"}
+        title: {"type": "string", "example": "Conflict"}
+        status: {"type": "integer", "example": 409, "minimum": 400, "maximum": 599}
+        detail: {"type": "string", "example": "Resource state does not allow this operation"}
+        code: {"type": "string", "example": "STATE_CONFLICT"}
+        instance: {"type": "string", "example": "/api/v1/purchase-orders"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+      additionalProperties: false
+    PurchaseOrder:
+      type: "object"
+      required:
+        ["id", "recommendationId", "productId", "status", "sagaStep", "createdAt", "updatedAt"]
+      properties:
+        id: {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        recommendationId:
+          {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+        productId: {"type": "string", "example": "SKU-001"}
+        status:
+          type: "string"
+          example: "PREPARING"
+          enum: ["PREPARING", "CONFIRMED", "CANCELLING", "CANCELLED", "RECEIVED"]
+        quantity: {"type": "integer", "example": 24, "minimum": 1}
+        arrivalDate: {"type": "string", "example": "2026-11-09", "format": "date"}
+        sagaStep:
+          type: "string"
+          example: "CLAIM"
+          enum: ["CLAIM", "PLAN", "COMMIT", "COMPENSATE", "DONE"]
+        lastError: {"type": "string", "example": "DEPENDENCY_TIMEOUT"}
+        createdAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        updatedAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+      additionalProperties: false
+    CreateOrderRequest:
+      type: "object"
+      required: ["recommendationId", "recommendationVersion", "productId"]
+      properties:
+        recommendationId:
+          {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+        recommendationVersion: {"type": "integer", "example": 1, "minimum": 1}
+        productId: {"type": "string", "example": "SKU-001"}
+      additionalProperties: false
+    PurchaseOrderPage:
+      type: "object"
+      required: ["items", "page", "size", "total"]
+      properties:
+        items: {"type": "array", "items": {"$ref": "#/components/schemas/PurchaseOrder"}}
+        page: {"type": "integer", "example": 1, "minimum": 1}
+        size: {"type": "integer", "example": 20, "minimum": 1, "maximum": 100}
+        total: {"type": "integer", "example": 1, "minimum": 0}
+      additionalProperties: false
+    OrderConfirmed:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType:
+          {"type": "string", "example": "purchase-order.confirmed", "enum": ["purchase-order.confirmed"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["orderId", "recommendationId", "productId", "quantity", "arrivalDate"]
+          properties:
+            orderId:
+              {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+            recommendationId:
+              {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            quantity: {"type": "integer", "example": 24, "minimum": 1}
+            arrivalDate: {"type": "string", "example": "2026-11-09", "format": "date"}
+          additionalProperties: false
+      additionalProperties: false
+    OrderCancelled:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType:
+          {"type": "string", "example": "purchase-order.cancelled", "enum": ["purchase-order.cancelled"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["orderId", "recommendationId", "productId", "reason"]
+          properties:
+            orderId:
+              {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+            recommendationId:
+              {"type": "string", "example": "c1b275fe-ab44-51ca-b101-a16be786abd0", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            reason:
+              type: "string"
+              example: "DEPENDENCY_FAILED"
+              enum: ["USER_CANCEL", "STOCK_CHANGED", "DEPENDENCY_FAILED"]
+          additionalProperties: false
+      additionalProperties: false
+    StockReceived:
+      type: "object"
+      required:
+        - "eventId"
+        - "eventType"
+        - "schemaVersion"
+        - "occurredAt"
+        - "correlationId"
+        - "aggregateId"
+        - "aggregateVersion"
+        - "payload"
+      properties:
+        eventId:
+          {"type": "string", "example": "6e8887d0-1ada-59fe-a75b-80ca5a66e73c", "format": "uuid"}
+        eventType: {"type": "string", "example": "stock.received", "enum": ["stock.received"]}
+        schemaVersion: {"type": "integer", "example": 1, "enum": [1]}
+        occurredAt: {"type": "string", "example": "2026-11-02T09:00:00Z", "format": "date-time"}
+        correlationId:
+          {"type": "string", "example": "ad243c6d-9757-5fff-9a56-59d21e697bb6", "format": "uuid"}
+        aggregateId:
+          {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+        aggregateVersion: {"type": "integer", "example": 1, "minimum": 1}
+        payload:
+          type: "object"
+          required: ["orderId", "receiptId", "productId", "quantity", "stockVersion"]
+          properties:
+            orderId:
+              {"type": "string", "example": "78827a78-e82a-5f56-ab94-e05094331891", "format": "uuid"}
+            receiptId:
+              {"type": "string", "example": "8e3fa519-bf2d-5210-a81e-d4da5dd33e7a", "format": "uuid"}
+            productId: {"type": "string", "example": "SKU-001"}
+            quantity: {"type": "integer", "example": 24, "minimum": 1}
+            stockVersion: {"type": "integer", "example": 9, "minimum": 1}
+          additionalProperties: false
+      additionalProperties: false
+  responses:
+    Error400:
+      description: "Invalid request"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:invalid-request"
+            title: "Invalid request"
+            status: 400
+            detail: "Запрос не может быть выполнен: INVALID_REQUEST"
+            code: "INVALID_REQUEST"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error401:
+      description: "Authentication required"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:unauthorized"
+            title: "Authentication required"
+            status: 401
+            detail: "Запрос не может быть выполнен: UNAUTHORIZED"
+            code: "UNAUTHORIZED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error403:
+      description: "Access denied"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:forbidden"
+            title: "Access denied"
+            status: 403
+            detail: "Запрос не может быть выполнен: FORBIDDEN"
+            code: "FORBIDDEN"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error404:
+      description: "Resource not found"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:not-found"
+            title: "Resource not found"
+            status: 404
+            detail: "Запрос не может быть выполнен: NOT_FOUND"
+            code: "NOT_FOUND"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error409:
+      description: "State conflict"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:state-conflict"
+            title: "State conflict"
+            status: 409
+            detail: "Запрос не может быть выполнен: STATE_CONFLICT"
+            code: "STATE_CONFLICT"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error422:
+      description: "Validation failed"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:validation-error"
+            title: "Validation failed"
+            status: 422
+            detail: "Запрос не может быть выполнен: VALIDATION_ERROR"
+            code: "VALIDATION_ERROR"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error429:
+      description: "Too many requests"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:rate-limited"
+            title: "Too many requests"
+            status: 429
+            detail: "Запрос не может быть выполнен: RATE_LIMITED"
+            code: "RATE_LIMITED"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+    Error503:
+      description: "Service unavailable"
+      content:
+        "application/problem+json":
+          schema: {"$ref": "#/components/schemas/Problem"}
+          example:
+            type: "urn:problem:dependency-unavailable"
+            title: "Service unavailable"
+            status: 503
+            detail: "Запрос не может быть выполнен: DEPENDENCY_UNAVAILABLE"
+            code: "DEPENDENCY_UNAVAILABLE"
+            instance: "/api/v1/resource"
+            correlationId: "ad243c6d-9757-5fff-9a56-59d21e697bb6"
+x-messages:
+  purchase-order.confirmed:
+    exchange: "demand.events"
+    routingKey: "purchase-order.confirmed"
+    publisher: "procurement-service"
+    subscribers: ["inventory-service", "replenishment-service"]
+    schema: {"$ref": "#/components/schemas/OrderConfirmed"}
+    queues:
+      - "q.inventory-service.purchase-order.confirmed"
+      - "q.replenishment-service.purchase-order.confirmed"
+  purchase-order.cancelled:
+    exchange: "demand.events"
+    routingKey: "purchase-order.cancelled"
+    publisher: "procurement-service"
+    subscribers: ["inventory-service", "replenishment-service"]
+    schema: {"$ref": "#/components/schemas/OrderCancelled"}
+    queues:
+      - "q.inventory-service.purchase-order.cancelled"
+      - "q.replenishment-service.purchase-order.cancelled"
+  stock.received:
+    exchange: "demand.events"
+    routingKey: "stock.received"
+    publisher: "inventory-service"
+    subscribers: ["procurement-service"]
+    schema: {"$ref": "#/components/schemas/StockReceived"}
+    queues: ["q.procurement-service.stock.received"]
