@@ -6,11 +6,11 @@
 
 ## Лабораторная работа № 5. CI/CD
 
-[![Lab 5 CI/CD](https://github.com/gianni090/demand-forecasting-microservices/actions/workflows/lab5-cicd.yml/badge.svg?branch=lab5%2Fci-cd)](https://github.com/gianni090/demand-forecasting-microservices/actions/workflows/lab5-cicd.yml)
+[![Lab 5 CI/CD — main](https://github.com/gianni090/demand-forecasting-microservices/actions/workflows/lab5-cicd.yml/badge.svg?branch=main)](https://github.com/gianni090/demand-forecasting-microservices/actions/workflows/lab5-cicd.yml?query=branch%3Amain)
 
 GitHub Actions собирает и проверяет сервисы продаж, прогнозирования и запасов. Для каждого сервиса выполняются компиляция Python, unit-тест, сборка Docker-образа и запрос к `/healthz` запущенного контейнера. После успешной проверки всех трёх сервисов CD публикует проверенный образ продаж в GitHub Container Registry. Команды для локальной проверки и выдержки из журналов приведены в [docs/cicd.md](docs/cicd.md).
 
-- [Успешный запуск и публикация образа](https://github.com/gianni090/demand-forecasting-microservices/actions/runs/44597979317)
+- [Успешный прогон на main и публикация образа](https://github.com/gianni090/demand-forecasting-microservices/actions/runs/44599481303)
 - [Запуск с намеренно падающим тестом](https://github.com/gianni090/demand-forecasting-microservices/actions/runs/44598107192)
 
 ## Лабораторная работа № 4. Реализация микросервисов
