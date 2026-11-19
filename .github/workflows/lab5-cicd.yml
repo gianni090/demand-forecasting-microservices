@@ -1,0 +1,116 @@
+name: Lab 5 CI/CD
+
+on:
+  push:
+    branches: [main, lab5/ci-cd, lab5/ci-failure]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI / ${{ matrix.service }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: sales-service
+            unit_test: test_domain.DomainTests.test_csv_aggregates_sales_and_excludes_returns
+          - service: forecast-service
+            unit_test: test_domain.DomainTests.test_quantiles_and_model_artifacts
+          - service: inventory-service
+            unit_test: test_domain.DomainTests.test_cancelled_plan_fences_late_creation
+    env:
+      SERVICE: ${{ matrix.service }}
+      UNIT_TEST: ${{ matrix.unit_test }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies and compile Python
+        run: |
+          python -m pip install -r requirements.txt
+          python -m compileall -q services mocks
+
+      - name: Run service unit test
+        run: PYTHONPATH=tests python -m unittest -v "$UNIT_TEST"
+
+      - name: Build Docker image
+        run: |
+          docker build --build-arg SERVICE="$SERVICE" --tag "$SERVICE:ci" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" .
+
+      - name: Start image and check HTTP response
+        run: |
+          container=$(docker run --detach "$SERVICE:ci")
+          trap 'docker logs "$container"; docker rm --force "$container" >/dev/null' EXIT
+          for attempt in {1..25}; do
+            if docker exec "$container" python -c '
+          import json, sys
+          from urllib.request import urlopen
+          with urlopen("http://127.0.0.1:8000/healthz", timeout=2) as response:
+              assert json.load(response) == {"status": "ok", "service": sys.argv[1]}
+          ' "$SERVICE" 2>/dev/null; then
+              echo "$SERVICE is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::$SERVICE did not return its expected health response"
+          exit 1
+
+      - name: Export checked sales image
+        if: matrix.service == 'sales-service' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lab5/ci-cd')
+        run: docker save sales-service:ci | gzip -1 > sales-image.tar.gz
+
+      - name: Upload checked sales image
+        if: matrix.service == 'sales-service' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lab5/ci-cd')
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: sales-image
+          path: sales-image.tar.gz
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error
+
+  publish:
+    name: CD / Publish sales-service to GHCR
+    needs: ci
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lab5/ci-cd')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download checked sales image
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: sales-image
+
+      - name: Log in and publish the checked image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/sales-service:sha-$GITHUB_SHA"
+          trap 'docker logout ghcr.io >/dev/null' EXIT
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker load --input sales-image.tar.gz
+          docker tag sales-service:ci "$image"
+          docker push "$image"
+          printf 'Published `%s`\n' "$image" >> "$GITHUB_STEP_SUMMARY"

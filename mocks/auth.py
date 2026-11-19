@@ -22,9 +22,9 @@ class Principal:
 
 
 class LocalIdentity:
-    def __init__(self):
-        self.secret = token_urlsafe(48)
-        self.gateway_proof = token_urlsafe(48)
+    def __init__(self, *, secret: str | None = None, gateway_proof: str | None = None):
+        self.secret = secret or token_urlsafe(48)
+        self.gateway_proof = gateway_proof or token_urlsafe(48)
 
     def issue(self, subject: str, role: str, kind: str) -> str:
         now = datetime.now(timezone.utc)
