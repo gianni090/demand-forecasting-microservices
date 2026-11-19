@@ -49,3 +49,34 @@ docker stop lab5-sales
 ## Демонстрация обработки ошибки
 
 В демонстрационной ветке `lab5/ci-failure` меняется ожидаемый результат unit-теста продаж. Этот запуск показывает, что при ошибке теста GitHub пропускает сборку образа продаж. Остальные элементы матрицы выполняются независимо. Изменение теста остаётся в демонстрационной ветке.
+
+## Результаты запуска на GitHub
+
+| Проверка | Результат | Журнал |
+| --- | --- | --- |
+| Обычный push в `lab5/ci-cd` | Три unit-теста прошли. Все образы собраны, каждый контейнер ответил на `/healthz`. Образ продаж опубликован в GHCR. | [Успешный запуск](https://github.com/gianni090/demand-forecasting-microservices/actions/runs/44597979317) |
+| Push в `lab5/ci-failure` | Тест продаж завершился с кодом 1. Сборка и запуск образа продаж пропущены. Прогнозирование и запасы прошли проверки. | [Демонстрация сбоя](https://github.com/gianni090/demand-forecasting-microservices/actions/runs/44598107192/job/135821786071) |
+
+Из [журнала проверок продаж](https://github.com/gianni090/demand-forecasting-microservices/actions/runs/44597979317/job/135821330744):
+
+```text
+sales-service is ready
+Artifact sales-image.zip successfully finalized. Artifact ID 14566363005
+```
+
+Из [журнала публикации](https://github.com/gianni090/demand-forecasting-microservices/actions/runs/44597979317/job/135821993164):
+
+```text
+Login Succeeded
+sha-097bdd502f214799e33ee8fe672613bd43473db2: digest: sha256:829a2f1fb698baf0fa2d3e8b6f7841ae936ac6550df241dc6eaefea6ee815e21 size: 2826
+```
+
+Опубликованный образ имеет адрес `ghcr.io/gianni090/demand-forecasting-microservices/sales-service:sha-097bdd502f214799e33ee8fe672613bd43473db2`.
+
+В демонстрационной ветке ожидаемое число увеличено с 20 до 21. Фактическое значение осталось 20.
+
+```text
+AssertionError: defaultdict(<class 'int'>, {'2026-11-02': 20}) != {'2026-11-02': 21}
+FAILED (failures=1)
+##[error]Process completed with exit code 1.
+```
