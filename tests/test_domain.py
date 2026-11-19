@@ -23,7 +23,8 @@ class DomainTests(unittest.TestCase):
             b"A,2026-11-05,5,RETURN\nA,wrong,3,SALE\n"
         )
         self.assertEqual((accepted, rejected, cutoff), (3, 1, date(2026, 11, 9)))
-        self.assertEqual(history["A"], {"2026-11-02": 20})
+        # Intentional mismatch for the Lab 5 failure demonstration.
+        self.assertEqual(history["A"], {"2026-11-02": 21})
 
     def test_quantiles_and_model_artifacts(self):
         history = [20] * 14
