@@ -282,8 +282,8 @@ class LocalNetwork:
             await asyncio.sleep(delays[attempt] + random.uniform(0, 0.1))
 
 
-def service_app(service: Service, identity: LocalIdentity) -> FastAPI:
-    app = FastAPI(title=service.name, docs_url=None, redoc_url=None, openapi_url=None)
+def service_app(service: Service, identity: LocalIdentity, *, lifespan=None) -> FastAPI:
+    app = FastAPI(title=service.name, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     install_http_errors(app, service.name)
 
     def register(operation):

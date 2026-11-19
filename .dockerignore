@@ -1,0 +1,10 @@
+**
+!requirements.txt
+!services/
+!services/**
+!mocks/
+!mocks/**
+!api/
+!api/**
+**/__pycache__/
+**/*.pyc
